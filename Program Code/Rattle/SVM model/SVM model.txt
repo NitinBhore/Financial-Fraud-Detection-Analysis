@@ -1,0 +1,20 @@
+Summary of the SVM model (built using ksvm):
+
+Support Vector Machine object of class "ksvm" 
+
+SV type: C-svc  (classification) 
+ parameter : cost C = 1 
+
+Gaussian Radial Basis kernel function. 
+ Hyperparameter : sigma =  0.136714861606916 
+
+Number of Support Vectors : 707 
+
+Objective Function Value : -87.3517 
+Training error : 0.007157 
+Probability model included. 
+
+Time taken: 49.96 secs
+
+Rattle timestamp: 2017-07-29 13:21:44 dbda
+======================================================================

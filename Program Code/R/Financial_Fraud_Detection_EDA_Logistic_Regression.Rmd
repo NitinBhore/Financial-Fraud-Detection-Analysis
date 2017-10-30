@@ -1,0 +1,218 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+================================================================================
+
+CDAC ACTS
+
+PG-DBDA (Feb.2017)
+
+PRN : 170240125009
+    
+Project : Financial Fraud Detection Analysis
+
+Analysis : EDA and Logistic Regression
+
+================================================================================
+
+
+```{r}
+
+# Reading dataset
+
+library(plotrix)
+
+DataFraud <- read.csv(file = file.choose())
+DataFraud$NameOrig <- NULL
+DataFraud$NameDest <- NULL
+##DataFraud$isFlaggedFraud <- NULL
+
+DataFraud
+
+#===============================================================================
+
+
+# EDA : 1.Payment Methods with Count of Total Transactions
+
+CountPaymentTypes <- table(DataFraud$Type)
+CountPaymentTypes
+barplot(CountPaymentTypes, xlab = "Payment Modes", ylab = "Count of transections")
+
+#===============================================================================
+
+
+# EDA : 2. Pie Chart for Fraud Percentage in Total Transection
+
+FraudCount <- as.data.frame(table(DataFraud$isFraud))
+FraudCount$Var1[1] <- "No Fraud"
+FraudCount$Var1[2] <- "Fraud"
+
+pie3D(FraudCount$Freq,labels=FraudCount$Var1, main="Fraud Count", col = c("Green","Red"), explode = 0.1)
+
+piepercent<- round(100*FraudCount$Freq/sum(FraudCount$Freq), 1)
+piepercent
+
+# Plot the chart.
+pie(FraudCount$Freq, labels = piepercent, main = "Fraud Percent Pie chart", col = rainbow(length(FraudCount$Freq)))
+
+legend("topright", c("No Fraud","Fraud"), cex = 0.8, fill = rainbow(length(FraudCount$Freq)))
+
+#===============================================================================
+
+
+# EDA : 3. PAyment modes vs Count of Fraud Transactions
+
+PaymentTypeFraudCount <- aggregate(DataFraud$isFraud, by = list(values = DataFraud$Type), FUN = sum)
+
+tableData <- as.table(PaymentTypeFraudCount$x)
+
+barplot(as.table(PaymentTypeFraudCount$x), names.arg = PaymentTypeFraudCount$values, xlab = "Payment Modes", ylab = "Count of transections")
+
+#===============================================================================
+
+
+# EDA : 4. Amount Transfer vs Count of Fraud transactions
+
+FraudData <- DataFraud[which(DataFraud$isFraud == 1),]
+
+CompleteTransfer <- FraudData[which(FraudData$NewBalanceOrig == 0),]
+
+NotCompleteTransfer <- FraudData[-which(FraudData$NewBalanceOrig == 0),]
+
+FraudCount <- c(nrow(CompleteTransfer), nrow(NotCompleteTransfer))
+
+barplot(FraudCount, names.arg = c("Complete Amt Transfer", "NOt Complete Amt transfer"), xlab = "Payment Modes", ylab = "Count of transections")
+
+#===============================================================================
+
+
+# EDA : 5.Hour of Day vs Count of Fraud Transactions
+
+PaymentTypeFraudCByStep <- aggregate(DataFraud$isFraud,by = list(values = DataFraud$Step),FUN = sum)
+
+PaymentTypeFraudCByStep[96,] <- NA
+
+data<-seq(1,24) 
+
+PaymentTypeFraudCByStep$values <- data
+
+PaymentTypeFraudCByStep
+
+PaymentTypeFraudCByStep <- aggregate(PaymentTypeFraudCByStep$x,by = list(values = PaymentTypeFraudCByStep$values),FUN = sum)
+
+barplot(PaymentTypeFraudCByStep$x,names.arg = PaymentTypeFraudCByStep$values ,xlab = "Hour Of Day" , ylab = "Count of Frauds")
+
+#===============================================================================
+
+
+# Logistic Regression
+
+library(dummies)
+
+maxs <- apply(DataFraud, 2, max)
+mins <- apply(DataFraud, 2, min)
+
+DataFraud <- cbind(DataFraud, dummy(DataFraud$Type, sep = "_"))
+
+FraudTrans <- DataFraud$isFraud
+
+DataFraud$Type <- NULL
+DataFraud$Step <- NULL
+DataFraud$isFraud <- NULL
+
+length(DataFraud)
+
+DataFraudDF <- scale(DataFraud, center= mins, scale = maxs - mins)
+
+DataFraudDF <- as.data.frame(DataFraudDF)
+
+nrow(DataFraudDF)
+
+DataFraudDF$isFraud <- FraudTrans
+
+train <- DataFraudDF[c(1:700000),]
+test <- DataFraudDF[-c(1:700000),]
+
+
+# LOGISTIC REGRESSION RUN ON TRAIN DATA OF FRAUD DETECTION
+# ITERATION 1
+
+LogisticModel <- glm(isFraud ~ ., data = train)
+summary(LogisticModel)
+
+train$DataFraud_TRANSFER <- NULL
+test$DataFraud_TRANSFER <- NULL
+
+
+# Building model by removing non significant variable
+
+LogisticModel <- glm(isFraud ~ ., data = train)
+summary(LogisticModel)
+anova(LogisticModel, test="Chisq")
+
+
+# ANOVA Shows OldBalanceOrg is insignificat in model
+# So remove "OldBalanceOrg"
+# Again building the model
+
+train$OldBalanceOrg <- NULL
+test$OldBalanceOrg <- NULL
+
+LogisticModel <- glm(isFraud ~ ., data = train)
+summary(LogisticModel)
+anova(LogisticModel, test="Chisq")
+
+
+# ANOVA shows NewBalanceOrig is insignificat in model.
+# So remove "NewBalanceOrig"
+# Again building the model
+
+train$NewBalanceOrig <- NULL
+test$NewBalanceOrig <- NULL
+
+LogisticModel <- glm(isFraud ~ ., data = train)
+summary(LogisticModel)
+anova(LogisticModel, test="Chisq")
+
+
+# Fit the model on Test Data
+
+fitted.results <- predict(LogisticModel, newdata=test)
+fitted.results <- ifelse(fitted.results > 0.5, 1, 0)
+dataLength <- mean(fitted.results == test$isFraud)
+paste("Accuracy of the model is ", (dataLength*100))
+
+#===============================================================================
+
+
+# Model iS accurate 99% on the test Data
+
+# Now use model for predicting the complete Data
+
+library(caret)
+library(e1071)
+
+fitted.results <- predict(LogisticModel, newdata=DataFraudDF)
+fitted.results <- ifelse(fitted.results > 0.5, 1, 0)
+dataLength <- mean(fitted.results == DataFraudDF$isFraud)
+
+paste("Accuracy of the model is ", (dataLength*100))
+
+confusionMatrix(fitted.results, DataFraudDF$isFraud)
+
+#===============================================================================
+#===================================== End =====================================
+
+
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
